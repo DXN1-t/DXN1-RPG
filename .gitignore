@@ -1,0 +1,15 @@
+# Secrets
+.discord_token
+.env
+
+# Generated at runtime
+rpg.db
+bot_config.json
+darkmatter.png
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db

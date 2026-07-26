@@ -1,5 +1,6 @@
+#!/usr/bin/env python3
 """
-🎮 ULTIMATE DISCORD RPG BOT - v2.1 ENHANCED
+GAME ULTIMATE DISCORD RPG BOT - v2.1 ENHANCED
 - Auto responds to EVERY message
 - Auto-creates characters for new players
 - Token setup wizard
@@ -8,6 +9,47 @@
 - New rare and exotic items added
 - 100% functional, production-ready
 """
+
+# ============================================================================
+# AUTO-DEPENDENCY INSTALLER
+# ============================================================================
+
+import os as _os
+import subprocess as _sp
+import sys as _sys
+import importlib as _il
+import shutil as _shutil
+
+def _is_termux():
+    try:
+        return _shutil.which("pkg") is not None or _os.path.exists("/data/data/com.termux/files/usr")
+    except Exception:
+        return False
+
+def _ensure_deps():
+    required = {"discord.py": "discord", "Pillow": "PIL"}
+    to_install = []
+    for pip_name, import_name in required.items():
+        try:
+            _il.import_module(import_name)
+        except ImportError:
+            to_install.append(pip_name)
+    if to_install:
+        print(f"  Auto-installing: {', '.join(to_install)} ...")
+        cmd = [_sys.executable, "-m", "pip", "install"] + to_install
+        try:
+            _sp.check_call(cmd)
+        except _sp.CalledProcessError:
+            _sp.check_call(cmd + ["--break-system-packages"])
+    if _is_termux():
+        for pkg in ["font-dejavu", "libjpeg-turbo", "libpng", "freetype"]:
+            try:
+                _sp.run(["pkg", "install", "-y", pkg], capture_output=True, timeout=30)
+            except Exception:
+                pass
+
+_ensure_deps()
+del _sp, _sys, _il, _shutil, _is_termux, _ensure_deps, _os
 
 import asyncio
 import difflib
@@ -856,12 +898,35 @@ TYPE_EMOJIS = {
     "material": "🪨",
 }
 
+def _find_font(name: str) -> Optional[str]:
+    """Search for a font file across common paths (Linux, macOS, Termux)."""
+    import glob as _glob
+    candidates = [
+        f"/usr/share/fonts/truetype/dejavu/{name}",
+        f"/usr/share/fonts/dejavu/{name}",
+        f"/usr/share/fonts/TTF/{name}",
+        f"{os.environ.get('PREFIX', '/usr')}/share/fonts/TTF/{name}",
+        f"{os.environ.get('PREFIX', '/usr')}/share/fonts/{name}",
+        f"{os.path.expanduser('~')}/.local/share/fonts/{name}",
+        f"{os.path.expanduser('~')}/fonts/{name}",
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    for pat in ["/usr/share/fonts/**/" + name, "/data/data/com.termux/**/" + name]:
+        found = _glob.glob(pat, recursive=True)
+        if found:
+            return found[0]
+    return None
+
 def load_fonts(title_size: int = 24, text_size: int = 16, small_size: int = 12) -> Tuple[ImageFont.FreeTypeFont, ImageFont.FreeTypeFont, ImageFont.FreeTypeFont]:
-    """Load fonts with fallback to defaults."""
+    """Load fonts with Termux-aware path detection and fallback to defaults."""
+    bold = _find_font("DejaVuSans-Bold.ttf")
+    regular = _find_font("DejaVuSans.ttf")
     try:
-        title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", title_size)
-        text_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", text_size)
-        small_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", small_size)
+        title_font = ImageFont.truetype(bold, title_size) if bold else ImageFont.load_default()
+        text_font = ImageFont.truetype(regular, text_size) if regular else ImageFont.load_default()
+        small_font = ImageFont.truetype(regular, small_size) if regular else ImageFont.load_default()
     except (FileNotFoundError, OSError):
         title_font = ImageFont.load_default()
         text_font = ImageFont.load_default()
@@ -6742,14 +6807,13 @@ async def setup_server():
 
             if role.name not in ["@everyone"]:
                 try:
-                    try:
                     await role.delete()
                 except discord.Forbidden:
                     print(f"Skipping role (missing permissions): {role.name}")
                     continue
                 except discord.HTTPException:
-                    continue
                     await asyncio.sleep(0.5)
+                    continue
                 except discord.errors.NotFound:
                     pass  # Already deleted
         
