@@ -45,7 +45,8 @@ def _ensure_deps():
         for pkg in ["font-dejavu", "libjpeg-turbo", "libpng", "freetype"]:
             try:
                 _sp.run(["pkg", "install", "-y", pkg], capture_output=True, timeout=30)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L48: {type(e).__name__}: {e}")
                 pass
 
 _ensure_deps()
@@ -1261,10 +1262,13 @@ def generate_category_preview(category: str, item_count: int, cheapest_price: in
 def get_or_setup_token() -> str:
     """First run: ask for token, save it. Subsequent runs: load from file."""
     if TOKEN_PATH.exists():
-        token = TOKEN_PATH.read_text().strip()
-        if token:
-            print(f"✅ Loaded token from {TOKEN_PATH}")
-            return token
+        try:
+            token = TOKEN_PATH.read_text().strip()
+            if token:
+                print(f"✅ Loaded token from {TOKEN_PATH}")
+                return token
+        except OSError as e:
+            print(f"  [token] Could not read token file: {e}")
     
     print("\n" + "="*60)
     print("🤖 DISCORD BOT - FIRST RUN SETUP")
@@ -1291,15 +1295,20 @@ def get_or_setup_token() -> str:
 def load_config() -> dict:
     """Load or create default config."""
     if CONFIG_PATH.exists():
-        return json.loads(CONFIG_PATH.read_text())
-    
+        try:
+            return json.loads(CONFIG_PATH.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  [config] Corrupt config, resetting: {e}")
     config = {
         "prefix": "!",
         "max_guild_members": 50,
         "trade_tax": 0.0227,
         "tax_owner_id": 0,
     }
-    CONFIG_PATH.write_text(json.dumps(config, indent=2))
+    try:
+        CONFIG_PATH.write_text(json.dumps(config, indent=2))
+    except OSError as e:
+        print(f"  [config] Could not write config: {e}")
     return config
 
 CONFIG = load_config()
@@ -2820,9 +2829,77 @@ def ts() -> int:
     return int(time.time())
 
 def qexec(sql: str, params=()) -> sqlite3.Cursor:
-    cur = db.execute(sql, params)
-    db.commit()
-    return cur
+    try:
+        cur = db.execute(sql, params)
+        db.commit()
+        return cur
+    except (sqlite3.ProgrammingError, sqlite3.OperationalError):
+        db_reconnect()
+        cur = db.execute(sql, params)
+        db.commit()
+        return cur
+
+
+# ============================================================================
+# SAFE SEND + DB RECONNECT FALLBACKS
+# ============================================================================
+
+async def safe_send(channel, *args, **kwargs):
+    """Send a message, silently swallowing Discord errors (rate limits, perms, etc.)."""
+    try:
+        return await channel.send(*args, **kwargs)
+    except discord.HTTPException as e:
+        print(f"  [safe_send] HTTP {e.status}: {e}")
+    except discord.Forbidden:
+        print(f"  [safe_send] Forbidden in #{getattr(channel, 'name', '?')}")
+    except Exception as e:
+        print(f"  [safe_send] {type(e).__name__}: {e}")
+    return None
+
+async def safe_reply(message, *args, **kwargs):
+    """Reply to a message with fallback to channel.send if reply fails."""
+    try:
+        return await message.reply(*args, **kwargs)
+    except discord.HTTPException:
+        try:
+            return await message.channel.send(*args, **kwargs)
+        except Exception as e:
+            print(f"  [warn] L2865: {type(e).__name__}: {e}")
+            pass
+    except Exception as e:
+        print(f"  [warn] L2867: {type(e).__name__}: {e}")
+        pass
+    return None
+
+async def safe_edit(interaction, *args, **kwargs):
+    """Edit an interaction response with fallback."""
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(*args, **kwargs)
+        else:
+            await interaction.response.send_message(*args, **kwargs)
+    except discord.HTTPException as e:
+        print(f"  [safe_edit] HTTP {e.status}: {e}")
+    except Exception as e:
+        print(f"  [safe_edit] {type(e).__name__}: {e}")
+
+def db_reconnect():
+    """Reconnect the DB if the connection was dropped."""
+    global db
+    try:
+        db.execute("SELECT 1")
+    except (sqlite3.ProgrammingError, sqlite3.OperationalError):
+        print("  [db] Reconnecting...")
+        try:
+            db.close()
+        except Exception as e:
+            print(f"  [warn] L2892: {type(e).__name__}: {e}")
+            pass
+        db = sqlite3.connect(str(DB_PATH), timeout=30, check_same_thread=False)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA journal_mode=WAL;")
+        db.execute("PRAGMA synchronous=NORMAL;")
+        db.execute("PRAGMA foreign_keys=ON;")
 
 def rarity_emoji(rarity: str) -> str:
     return V.rarity_emoji(rarity)
@@ -2884,7 +2961,8 @@ def apply_theme(embed):
         if THEME_PNG_PATH.exists():
             embed.set_image(url="attachment://darkmatter.png")
             return discord.File(str(THEME_PNG_PATH), filename="darkmatter.png")
-    except Exception:
+    except Exception as e:
+        print(f"  [warn] L2960: {type(e).__name__}: {e}")
         pass
     return None
 
@@ -5227,7 +5305,8 @@ async def _delete_later(channel, delay):
     await asyncio.sleep(delay)
     try:
         await channel.delete(reason="Trade finished")
-    except Exception:
+    except Exception as e:
+        print(f"  [warn] L5303: {type(e).__name__}: {e}")
         pass
 
 
@@ -6127,7 +6206,8 @@ Use: !attack | !defend | !run""")
             await asyncio.sleep(0.7)
             try:
                 await reveal.edit(content=f"{header}\n{fr}")
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L6203: {type(e).__name__}: {e}")
                 pass
         return
 
@@ -7822,7 +7902,8 @@ async def on_message(message: discord.Message):
             embed.add_field(name="♾️ All-Time", value=f"{msg_count(tid, -1):,}", inline=True)
             try:
                 embed.set_thumbnail(url=target.display_avatar.url)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L7898: {type(e).__name__}: {e}")
                 pass
             _tf = apply_theme(embed)
             await message.reply(embed=embed, file=_tf)
@@ -7981,7 +8062,8 @@ async def on_message(message: discord.Message):
                     embed.set_thumbnail(url=guild.icon.url)
                 else:
                     embed.set_thumbnail(url=message.author.display_avatar.url)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L8057: {type(e).__name__}: {e}")
                 pass
             embed.set_footer(text="Meet the requirements to auto-earn the role & enter the world channel! • Admins: `world setup`")
             _tf = apply_theme(embed)
@@ -8271,7 +8353,8 @@ async def on_message(message: discord.Message):
             )
             try:
                 embed.set_thumbnail(url=message.author.display_avatar.url)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L8347: {type(e).__name__}: {e}")
                 pass
             embed.add_field(name=get_label("hp"), value=f"💓 {p['hp']}/{p['max_hp']} 💓", inline=True)
             embed.add_field(name=get_label("mana"), value=f"✨ {p['mana']}/{p['max_mana']} ✨", inline=True)
@@ -8352,7 +8435,8 @@ async def on_message(message: discord.Message):
             embed = discord.Embed(title=f"📦✨ {p['name']}'s INVENTORY ✨📦", description=inv_str, color=rarity_color(inv[0]["rarity"]))
             try:
                 embed.set_thumbnail(url=message.author.display_avatar.url)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L8428: {type(e).__name__}: {e}")
                 pass
             eq = get_equipment(user_id)
             eq_lines = []
@@ -8510,7 +8594,8 @@ async def on_message(message: discord.Message):
             try:
                 if message.guild and message.guild.icon:
                     embed.set_thumbnail(url=message.guild.icon.url)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L8586: {type(e).__name__}: {e}")
                 pass
             embed.set_footer(text="💎 Pick a category to browse • `market sell [item] [price]` to list yours")
             await message.reply(embed=embed, view=MarketCategoryView(listings))
@@ -8555,7 +8640,8 @@ async def on_message(message: discord.Message):
             try:
                 if message.guild and message.guild.icon:
                     embed.set_thumbnail(url=message.guild.icon.url)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L8631: {type(e).__name__}: {e}")
                 pass
             mlistings = list_market()
             if mlistings:
@@ -8882,7 +8968,8 @@ async def on_message(message: discord.Message):
                     if ch:
                         try:
                             await ch.delete(reason="guild disbanded")
-                        except Exception:
+                        except Exception as e:
+                            print(f"  [warn] L8958: {type(e).__name__}: {e}")
                             pass
                 qexec("UPDATE players SET guild_id=NULL WHERE guild_id=?", (grow["guild_id"],))
                 qexec("DELETE FROM guild_members WHERE guild_id=?", (grow["guild_id"],))
@@ -9135,7 +9222,8 @@ async def on_message(message: discord.Message):
             try:
                 if message.guild and message.guild.icon:
                     embed.set_thumbnail(url=message.guild.icon.url)
-            except Exception:
+            except Exception as e:
+                print(f"  [warn] L9211: {type(e).__name__}: {e}")
                 pass
             await message.reply(embed=embed)
             return
@@ -9854,24 +9942,38 @@ async def on_message(message: discord.Message):
         except:
             pass
 
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    import traceback
+    print(f"  [on_error] Event: {event}")
+    traceback.print_exc()
 @tasks.loop(seconds=SAVE_INTERVAL_SECONDS)
 async def autosave_loop():
-    async with db_lock:
-        now = ts()
-        for user_id in list(dirty_players):
-            db.execute("UPDATE players SET updated_at = ? WHERE user_id = ?", (now, user_id))
-        for user_id in list(dirty_fights):
-            db.execute("UPDATE fights SET updated_at = ? WHERE user_id = ?", (now, user_id))
-        db.commit()
-        dirty_players.clear()
-        dirty_fights.clear()
-        # Periodic WAL checkpoint (~every minute) keeps the DB file compact & durable without lag
-        autosave_loop._ticks = getattr(autosave_loop, "_ticks", 0) + 1
-        if autosave_loop._ticks % 12 == 0:
-            try:
-                db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            except sqlite3.Error:
-                pass
+    try:
+        async with db_lock:
+            db_reconnect()
+            now = ts()
+            for user_id in list(dirty_players):
+                db.execute("UPDATE players SET updated_at = ? WHERE user_id = ?", (now, user_id))
+            for user_id in list(dirty_fights):
+                db.execute("UPDATE fights SET updated_at = ? WHERE user_id = ?", (now, user_id))
+            db.commit()
+            dirty_players.clear()
+            dirty_fights.clear()
+            autosave_loop._ticks = getattr(autosave_loop, "_ticks", 0) + 1
+            if autosave_loop._ticks % 12 == 0:
+                try:
+                    db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                except sqlite3.Error:
+                    pass
+    except Exception as e:
+        print(f"  [autosave] Error: {e}")
+        try:
+            db_reconnect()
+        except Exception as e:
+            print(f"  [warn] L9953: {type(e).__name__}: {e}")
+            pass
 
 
 @tasks.loop(seconds=30)
