@@ -10,9 +10,9 @@
 [![SQLite](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Pillow](https://img.shields.io/badge/Pillow-Image%20Gen-FFD43B?style=for-the-badge&logo=python&logoColor=black)](https://pillow.readthedocs.io)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-v2.1-FF4081?style=for-the-badge&logo=rocket&logoColor=white)](https://github.com/DXN1-termux/DXN1-RPG)
-[![GitHub Stars](https://img.shields.io/github/stars/DXN1-termux/DXN1-RPG?style=for-the-badge&logo=github&color=FFD700)](https://github.com/DXN1-termux/DXN1-RPG/stargazers)
-[![Status](https://img.shields.io/badge/Status-Production%20Ready-00C853?style=for-the-badge&logo=checkmarx&logoColor=white)](https://github.com/DXN1-termux/DXN1-RPG)
+[![Version](https://img.shields.io/badge/Version-v2.1-FF4081?style=for-the-badge&logo=rocket&logoColor=white)](https://github.com/DXN1-t/DXN1-RPG)
+[![GitHub Stars](https://img.shields.io/github/stars/DXN1-t/DXN1-RPG?style=for-the-badge&logo=github&color=FFD700)](https://github.com/DXN1-t/DXN1-RPG/stargazers)
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-00C853?style=for-the-badge&logo=checkmarx&logoColor=white)](https://github.com/DXN1-t/DXN1-RPG)
 
 <br/>
 
@@ -56,7 +56,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/DXN1-termux/DXN1-RPG.git
+git clone https://github.com/DXN1-t/DXN1-RPG.git
 cd DXN1-RPG
 
 # Install dependencies
@@ -620,7 +620,7 @@ V.xp_bar / V.hp_color_bar     # Fancy Unicode progress bars
 
 <br/>
 
-1. Check [existing issues](https://github.com/DXN1-termux/DXN1-RPG/issues) first
+1. Check [existing issues](https://github.com/DXN1-t/DXN1-RPG/issues) first
 2. Open a new issue with:
    - Clear description of the bug or feature
    - Steps to reproduce (for bugs)
@@ -654,9 +654,9 @@ This project is licensed under the **MIT License** — see [`LICENSE`](LICENSE) 
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00E5FF,50:7E57C2,100:0B0B14&height=120&section=footer&animation=fadeIn" width="100%"/>
 
-**Made with 🌌 by [DXN1-termux](https://github.com/DXN1-termux)**
+**Made with 🌌 by [DXN1-t](https://github.com/DXN1-t)**
 
-[![GitHub](https://img.shields.io/badge/GitHub-DXN1--termux-181717?style=for-the-badge&logo=github)](https://github.com/DXN1-termux)
+[![GitHub](https://img.shields.io/badge/GitHub-DXN1--termux-181717?style=for-the-badge&logo=github)](https://github.com/DXN1-t)
 
 *Star ⭐ the repo if this bot runs on your server!*
 
